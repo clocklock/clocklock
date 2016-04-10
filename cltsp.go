@@ -28,49 +28,46 @@ var (
 )
 
 type Request struct {
-	Policy string `json:"policy"` // Policy ID
-	Hash   string `json:"digest"` // Name of the hash algorithm for the digest
-	Digest []byte `json:"digest"` // When converting to json, should be in hex format
-	Nonce  uint64 `json:"Nonce"`  // 8 bytes of random data represented numerically as an uint64. Assumed to be 0 if elided.
-	Cert   string `json:"cert"`   // Cert ID to request for signing. Optional. Hex encoding of the SHA256 fingerprint of the DER certificate.
-}
-
-func (req *Request) HashAlgo() (crypto.Hash, error) {
-	hashIdentifier, err := cryptoid.HashAlgorithmByName(req.Hash)
-	if err != nil {
-		return 0, err
-	}
-	return hashIdentifier.Hash, nil
+	Policy string      `json:"policy"` // Policy ID
+	Hash   crypto.Hash `json:"digest"` // numeric ID of the hash algorithm for the digest. Will be a string-name in JSON.
+	Digest []byte      `json:"digest"` // When converting and from to json, should be in hex format
+	Nonce  uint64      `json:"nonce"`  // 8 bytes of random data represented numerically as an uint64. Assumed to be 0 if elided.
+	Cert   string      `json:"cert"`   // Cert ID to request for signing. Optional. Hex encoding of the SHA256 fingerprint of the DER certificate.
 }
 
 type Response struct {
 	Success   bool          `json:"success"`
 	Serial    uint64        `json:"serial"`
-	Signature []byte        `json:"signature"` // When converting to json, should be in hex format
 	Time      uint64        `json:"time"`      // The timestamp time. Time in nanoseconds since January 1, 1970, 00:00:00.000000000 UTC.
 	Accuracy  time.Duration `json:"accuracy"`  // Accuracy in nano seconds. 0 means Perfect Accuracy (see doc). Must be provided.
+	Signature []byte        `json:"signature"` // When converting to json, should be in hex format
 	Request
 	Error *ResponseError `json:"error"`
 }
 
 // The TimeStampToken is the sha256 hash of the concactenation of the following:
+// - Hash ID
 // - digest bytes
 // - time
 // - accuracy
 // - serial
 // - policyID
 // - nonce.
-// The numeric portions (time, accuracy, serial) are in 64 bit big edian format.
+// The numeric portions (hash-id, time, accuracy, serial) are in 64 bit big edian format.
 // Even if the nonce is elided, it is still inclulded as a zeoroed out 8 bytes.
 func (resp *Response) TimeStampToken() []byte {
 	b := make([]byte, 8, 8)
 
 	buf := sha256.New()
 
+	// Hash ID
+	binary.BigEndian.PutUint64(b, uint64(resp.Hash))
+	buf.Write(b)
+
 	// Digest bytes
 	buf.Write(resp.Digest)
 
-	// time
+	// Time
 	binary.BigEndian.PutUint64(b, resp.Time)
 	buf.Write(b)
 
@@ -128,16 +125,10 @@ func (resp *Response) Verify(req *Request, cert *x509.Certificate) error {
 		return err
 	}
 
-	// Make sure the algorithim is valid
-	hashAlgo, err := resp.HashAlgo()
-	if err != nil {
-		return err
-	}
-
 	// Verify that the certificate signs the hashstamp and the certificate ID is correct
 	switch pub := cert.PublicKey.(type) {
 	case *rsa.PublicKey:
-		err = rsa.VerifyPKCS1v15(pub, hashAlgo, resp.TimeStampToken(), resp.Signature)
+		err := rsa.VerifyPKCS1v15(pub, resp.Hash, resp.TimeStampToken(), resp.Signature)
 		if err != nil {
 			return ErrInvalidSignature
 		}
@@ -164,6 +155,7 @@ func (resp *Response) Verify(req *Request, cert *x509.Certificate) error {
 
 type Policy struct {
 	Id             string            `json:"id"`
+	Oid            string            `json:"oid,omitempty"`   // Optional. ASN1 OID if available.
 	Name           string            `json:"name"`            // Human readable name
 	Description    string            `json:"desc"`            // Human readable description
 	Active         bool              `json:"active"`          // Is the policy actively available for use?
@@ -172,9 +164,12 @@ type Policy struct {
 	StampTimeout   time.Duration     `json:"stamp-timeout"`   // Maximum time in nanoseconds between receiving a request and stamping it.
 	RequestTimeout time.Duration     `json:"request-timeout"` // Maximum time in nanoseconds between receiving a request and returning a response.
 	Accuracy       time.Duration     `json:"accuracy"`        // Maximum Accuracy in nanoseconds. Any response that would result in an accuracy over this maximum will instead return an error. A value of 0 implies Perfect Accuracy.
+	Log            string            `json:"log"`             // Can be one of 'none', 'serial', 'hash'. Specifies how much information is stored in the TSA and available for query. Note that 'serial' and 'hash' have performance implications
 	Certs          map[string]string `json:"certs"`           // Certificates in PEM format.
-	Public         map[string]string `json:public`            // List of currently active signing public key in base64 format. Generally only one, but if a revocation or expiry is pending, then there may be more than one during the switchover.
-	Info           interface{}       `json:info`              // Any additional TSA specific information
+	Public         map[string]string `json:"public"`          // List of currently active signing public key in base64 format. Generally only one, but if a revocation or expiry is pending, then there may be more than one during the switchover.
+	Preferred      string            `json:"preferred"`       // Preferred Certificate. Will use this one if no cert is specified.
+	RFC3161        bool              `json:"rfc3161"`         // Does this policy support RFC 3161
+	Info           interface{}       `json:"info,omitempty"`  // Any additional TSA specific information
 }
 
 func (policy *Policy) GetCert(certId string) (*x509.Certificate, error) {

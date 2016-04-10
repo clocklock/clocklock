@@ -1,4 +1,4 @@
-package cltsp
+package clocklock
 
 import (
 	"crypto"

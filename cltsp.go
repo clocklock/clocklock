@@ -9,6 +9,7 @@ import (
 	"encoding/asn1"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"github.com/phayes/cryptoid"
@@ -29,16 +30,56 @@ var (
 
 type Request struct {
 	Policy string      `json:"policy"` // Policy ID
-	Hash   crypto.Hash `json:"digest"` // numeric ID of the hash algorithm for the digest. Will be a string-name in JSON.
+	Hash   crypto.Hash `json:"hash"`   // numeric ID of the hash algorithm for the digest. Will be a string-name in JSON.
 	Digest []byte      `json:"digest"` // When converting and from to json, should be in hex format
 	Nonce  uint64      `json:"nonce"`  // 8 bytes of random data represented numerically as an uint64. Assumed to be 0 if elided.
 	Cert   string      `json:"cert"`   // Cert ID to request for signing. Optional. Hex encoding of the SHA256 fingerprint of the DER certificate.
 }
 
+func (req *Request) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		*Request
+		Hash string
+	}{
+		Request: req,
+		Hash:    cryptoid.HashAlgorithmByCrypto(req.Hash).Name,
+	})
+}
+
+func (req *Request) UnmarshalJSON(data []byte) error {
+	un := struct {
+		*Request
+		Hash string
+	}{
+		Request: req,
+	}
+
+	err := json.Unmarshal(data, &un)
+	if err != nil {
+		return err
+	}
+	hashAlgo, err := cryptoid.HashAlgorithmByName(un.Hash)
+	if err != nil {
+		return err
+	}
+	if hashAlgo.Hash == 0 {
+		return cryptoid.UnableToFind
+	}
+
+	// Set values
+	req.Policy = un.Policy
+	req.Hash = hashAlgo.Hash
+	req.Digest = un.Digest
+	req.Nonce = un.Nonce
+	req.Cert = un.Cert
+
+	return nil
+}
+
 type Response struct {
 	Success   bool          `json:"success"`
 	Serial    uint64        `json:"serial"`
-	Time      uint64        `json:"time"`      // The timestamp time. Time in nanoseconds since January 1, 1970, 00:00:00.000000000 UTC.
+	Time      time.Time     `json:"time"`      // Nanosecond precision ISO 8601 timestamp. Must be UTC zoned.
 	Accuracy  time.Duration `json:"accuracy"`  // Accuracy in nano seconds. 0 means Perfect Accuracy (see doc). Must be provided.
 	Signature []byte        `json:"signature"` // When converting to json, should be in hex format
 	Request
@@ -53,6 +94,8 @@ type Response struct {
 // - serial
 // - policyID
 // - nonce.
+// Time is measured as the number of nanoseconds since 1970-01-01T00:00:00 UTC. Note that we include leapseconds,
+// so this will be 26 seconds (26,000,000,000 ns) ahead of the equivilent POSIX timestamp.
 // The numeric portions (hash-id, time, accuracy, serial) are in 64 bit big edian format.
 // Even if the nonce is elided, it is still inclulded as a zeoroed out 8 bytes.
 func (resp *Response) TimeStampToken() []byte {
@@ -68,7 +111,8 @@ func (resp *Response) TimeStampToken() []byte {
 	buf.Write(resp.Digest)
 
 	// Time
-	binary.BigEndian.PutUint64(b, resp.Time)
+	nano := resp.Time.UnixNano() + (26000000000) // Add 26 seconds to account for leapseconds
+	binary.BigEndian.PutUint64(b, uint64(nano))
 	buf.Write(b)
 
 	// Accuracy
@@ -254,15 +298,15 @@ func (policy *Policy) GetPublicKeys() ([]interface{}, error) {
 	return pubs, nil
 }
 
-func (policy *Policy) SupportedHashes() (map[string]crypto.Hash, error) {
-	supported := map[string]crypto.Hash{}
+func (policy *Policy) SupportedHashes() ([]crypto.Hash, error) {
+	supported := []crypto.Hash{}
 
 	for _, name := range policy.Supports {
 		hashIdentifier, err := cryptoid.HashAlgorithmByName(name)
 		if err != nil {
 			return nil, err
 		}
-		supported[name] = hashIdentifier.Hash
+		supported = append(supported, hashIdentifier.Hash)
 	}
 
 	return supported, nil
@@ -271,13 +315,17 @@ func (policy *Policy) SupportedHashes() (map[string]crypto.Hash, error) {
 type PolicyList map[string]Policy
 
 type ResponseError struct {
-	ErrorCode
-	Message string `json:message` // Any additional information about this error
+	*ErrorCode
+	Message error `json:message` // Any additional information about this error
+}
+
+func NewResponseError(code *ErrorCode, err error) *ResponseError {
+	return &ResponseError{ErrorCode: code, Message: err}
 }
 
 func (err *ResponseError) Error() string {
-	if err.Message != "" {
-		return err.ErrorCode.Error() + ". " + err.Message
+	if err.Message != nil {
+		return err.ErrorCode.Error() + ". " + err.Message.Error()
 	} else {
 		return err.ErrorCode.Error()
 	}
@@ -293,15 +341,15 @@ func (err *ErrorCode) Error() string {
 }
 
 var (
-	ErrorCodeUnknownError    = ErrorCode{0, "Unknown Error"}
-	ErrorCodeInvalidRequest  = ErrorCode{1, "Invalid Request"}
-	ErrorCodeServerError     = ErrorCode{2, "Server Error"}
-	ErrorCodeUnsupportedHash = ErrorCode{3, "Unsupported Hash Algorithm"}
-	ErrorCodeBadDigestLength = ErrorCode{4, "Bad Digest Length for given Hash Algorithm"}
-	ErrorCodeStampTimeout    = ErrorCode{5, "Stamp Timeout"}
-	ErrorCodeRequestTimeout  = ErrorCode{6, "Request Timeout"}
-	ErrorCodeAccuracy        = ErrorCode{7, "Accuracy Error"}
-	ErrorBadPolicy           = ErrorCode{7, "Unacceptable Policy"}
-	ErrorBadCert             = ErrorCode{7, "Unacceptable Cert"}
-	ErrorPolicyUpdated       = ErrorCode{7, "Policy Updated"}
+	ErrorCodeUnknownError    = &ErrorCode{0, "Unknown Error"}
+	ErrorCodeInvalidRequest  = &ErrorCode{1, "Invalid Request"}
+	ErrorCodeServerError     = &ErrorCode{2, "Server Error"}
+	ErrorCodeUnsupportedHash = &ErrorCode{3, "Unsupported Hash Algorithm"}
+	ErrorCodeBadDigestLength = &ErrorCode{4, "Bad Digest Length for given Hash Algorithm"}
+	ErrorCodeStampTimeout    = &ErrorCode{5, "Stamp Timeout"}
+	ErrorCodeRequestTimeout  = &ErrorCode{6, "Request Timeout"}
+	ErrorCodeAccuracy        = &ErrorCode{7, "Accuracy Error"}
+	ErrorBadPolicy           = &ErrorCode{7, "Unacceptable Policy"}
+	ErrorBadCert             = &ErrorCode{7, "Unacceptable Cert"}
+	ErrorPolicyUpdated       = &ErrorCode{7, "Policy Updated"}
 )

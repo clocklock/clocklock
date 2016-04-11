@@ -22,6 +22,7 @@ var (
 	ErrInvalidPEMBlock       = errors.New("Invalid PEM Block.")
 	ErrInvalidCertificatePEM = errors.New("Invalid Certificate")
 	ErrInvalidPublicPEM      = errors.New("Invalid Public Key")
+	ErrInvalidPolicyId       = errors.New("Invaid Policy ID.")
 	ErrInvalidCertificateId  = errors.New("Invaid Certificate / Public Key ID.")
 	ErrInvalidNonce          = errors.New("Invalid Nonce")
 	ErrInvalidSignature      = errors.New("Invalid Signature")
@@ -200,6 +201,7 @@ func (resp *Response) Verify(req *Request, cert *x509.Certificate) error {
 type Policy struct {
 	Id             string            `json:"id"`
 	Oid            string            `json:"oid,omitempty"`   // Optional. ASN1 OID if available.
+	Url            string            `json:"url"`             // The URL to connect for the policy. Generally the same URL where there policy was gotten in the first place.
 	Name           string            `json:"name"`            // Human readable name
 	Description    string            `json:"desc"`            // Human readable description
 	Active         bool              `json:"active"`          // Is the policy actively available for use?

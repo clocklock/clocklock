@@ -3,6 +3,7 @@ package clocklock
 import (
 	"crypto"
 	"crypto/ecdsa"
+	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
@@ -35,6 +36,10 @@ type Request struct {
 	Digest []byte      `json:"digest"` // When converting and from to json, should be in hex format
 	Nonce  uint64      `json:"nonce"`  // 8 bytes of random data represented numerically as an uint64. Assumed to be 0 if elided.
 	Cert   string      `json:"cert"`   // Cert ID to request for signing. Optional. Hex encoding of the SHA256 fingerprint of the DER certificate.
+}
+
+func (req *Request) GenerateNonce() error {
+	return binary.Read(rand.Reader, binary.BigEndian, req.Nonce)
 }
 
 func (req *Request) MarshalJSON() ([]byte, error) {

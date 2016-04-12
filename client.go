@@ -16,16 +16,32 @@ var (
 	ErrClientDisconnected = errors.New("clocklock: Client disconnected")
 )
 
-type Client struct {
-	conn   *websocket.Conn
-	resp   *http.Response
-	policy *Policy
-	state  int
+func FetchRule(url, ruleId string) (*Rule, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	rules := new(RuleList)
+	decoder := json.NewDecoder(resp.Body)
+	err = decoder.Decode(rules)
+	if err != nil {
+		return nil, err
+	}
+	return rules.GetRule(ruleId)
 }
 
-func NewClient(p *Policy) *Client {
+type Client struct {
+	conn  *websocket.Conn
+	resp  *http.Response
+	rule  *Rule
+	state int
+}
+
+func NewClient(r *Rule) *Client {
 	c := new(Client)
-	c.policy = p
+	c.rule = r
 	c.state = stateDisconnected
 
 	return c
@@ -39,7 +55,7 @@ func (c *Client) Connect() error {
 	}
 
 	var err error
-	c.conn, c.resp, err = clockDialer.Dial(c.policy.Url, nil)
+	c.conn, c.resp, err = clockDialer.Dial(c.rule.Url, nil)
 	if err != nil {
 		return err
 	}
@@ -53,8 +69,8 @@ func (c *Client) SendReceive(req *Request) (*Response, error) {
 	if c.state != stateConnected {
 		return nil, ErrClientDisconnected
 	}
-	if req.Policy != c.policy.Id {
-		return nil, ErrInvalidPolicyId
+	if req.Rule != c.rule.Id {
+		return nil, ErrInvalidRuleId
 	}
 
 	p, err := json.Marshal(req)

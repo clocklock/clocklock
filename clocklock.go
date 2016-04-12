@@ -23,7 +23,7 @@ var (
 	ErrInvalidPEMBlock       = errors.New("Invalid PEM Block.")
 	ErrInvalidCertificatePEM = errors.New("Invalid Certificate")
 	ErrInvalidPublicPEM      = errors.New("Invalid Public Key")
-	ErrInvalidPolicyId       = errors.New("Invaid Policy ID.")
+	ErrInvalidRuleId         = errors.New("Invaid Rule ID.")
 	ErrInvalidCertificateId  = errors.New("Invaid Certificate / Public Key ID.")
 	ErrInvalidNonce          = errors.New("Invalid Nonce")
 	ErrInvalidSignature      = errors.New("Invalid Signature")
@@ -31,7 +31,7 @@ var (
 )
 
 type Request struct {
-	Policy string      `json:"policy"` // Policy ID
+	Rule   string      `json:"rule"`   // rule ID
 	Hash   crypto.Hash `json:"hash"`   // numeric ID of the hash algorithm for the digest. Will be a string-name in JSON.
 	Digest []byte      `json:"digest"` // When converting and from to json, should be in hex format
 	Nonce  uint64      `json:"nonce"`  // 8 bytes of random data represented numerically as an uint64. Assumed to be 0 if elided.
@@ -73,7 +73,7 @@ func (req *Request) UnmarshalJSON(data []byte) error {
 	}
 
 	// Set values
-	req.Policy = un.Policy
+	req.Rule = un.Rule
 	req.Hash = hashAlgo.Hash
 	req.Digest = un.Digest
 	req.Nonce = un.Nonce
@@ -98,7 +98,7 @@ type Response struct {
 // - time
 // - accuracy
 // - serial
-// - policyID
+// - ruleID
 // - nonce.
 // Time is measured as the number of nanoseconds since 1970-01-01T00:00:00 UTC. Note that we include leapseconds,
 // so this will be 26 seconds (26,000,000,000 ns) ahead of the equivilent POSIX timestamp.
@@ -129,8 +129,8 @@ func (resp *Response) TimeStampToken() []byte {
 	binary.BigEndian.PutUint64(b, resp.Serial)
 	buf.Write(b)
 
-	// Policy id
-	buf.Write([]byte(resp.Policy))
+	// Rule id
+	buf.Write([]byte(resp.Rule))
 
 	// Nonce
 	binary.BigEndian.PutUint64(b, resp.Nonce)
@@ -140,7 +140,7 @@ func (resp *Response) TimeStampToken() []byte {
 }
 
 // Fully verify the response
-// The caller is responsible for passing the correct certificate (as retreived from the policy)
+// The caller is responsible for passing the correct certificate (as retreived from the rule)
 func (resp *Response) Verify(req *Request, cert *x509.Certificate) error {
 	if !resp.Success {
 		return resp.Error
@@ -203,28 +203,29 @@ func (resp *Response) Verify(req *Request, cert *x509.Certificate) error {
 	return nil
 }
 
-type Policy struct {
+type Rule struct {
 	Id             string            `json:"id"`
-	Oid            string            `json:"oid,omitempty"`   // Optional. ASN1 OID if available.
-	Url            string            `json:"url"`             // The URL to connect for the policy. Generally the same URL where there policy was gotten in the first place.
-	Name           string            `json:"name"`            // Human readable name
-	Description    string            `json:"desc"`            // Human readable description
-	Active         bool              `json:"active"`          // Is the policy actively available for use?
-	Ordered        bool              `json:"ordered"`         // Do the serial numbers provided increase monotonically with time
-	Supports       []string          `json:"supports"`        // List of hash identifiers that this policy supports
-	StampTimeout   time.Duration     `json:"stamp-timeout"`   // Maximum time in nanoseconds between receiving a request and stamping it.
-	RequestTimeout time.Duration     `json:"request-timeout"` // Maximum time in nanoseconds between receiving a request and returning a response.
-	Accuracy       time.Duration     `json:"accuracy"`        // Maximum Accuracy in nanoseconds. Any response that would result in an accuracy over this maximum will instead return an error. A value of 0 implies Perfect Accuracy.
-	Log            string            `json:"log"`             // Can be one of 'none', 'serial', 'hash'. Specifies how much information is stored in the TSA and available for query. Note that 'serial' and 'hash' have performance implications
-	Certs          map[string]string `json:"certs"`           // Certificates in PEM format.
-	Public         map[string]string `json:"public"`          // List of currently active signing public key in base64 format. Generally only one, but if a revocation or expiry is pending, then there may be more than one during the switchover.
-	Preferred      string            `json:"preferred"`       // Preferred Certificate. Will use this one if no cert is specified.
-	RFC3161        bool              `json:"rfc3161"`         // Does this policy support RFC 3161
-	Info           interface{}       `json:"info,omitempty"`  // Any additional TSA specific information
+	Oid            string            `json:"oid,omitempty"`    // Optional. ASN1 OID if available.
+	Policy         string            `json:"policy,omitempty"` // Optional. ASN1 OID if the stamping rule has an associated cert stamping policy.
+	Url            string            `json:"url"`              // The URL to connect for the rule. Generally the same URL where there rule was gotten in the first place.
+	Name           string            `json:"name"`             // Human readable name
+	Description    string            `json:"desc"`             // Human readable description
+	Active         bool              `json:"active"`           // Is the rule actively available for use?
+	Ordered        bool              `json:"ordered"`          // Do the serial numbers provided increase monotonically with time
+	Supports       []string          `json:"supports"`         // List of hash identifiers that this rule supports
+	StampTimeout   time.Duration     `json:"stamp-timeout"`    // Maximum time in nanoseconds between receiving a request and stamping it.
+	RequestTimeout time.Duration     `json:"request-timeout"`  // Maximum time in nanoseconds between receiving a request and returning a response.
+	Accuracy       time.Duration     `json:"accuracy"`         // Maximum Accuracy in nanoseconds. Any response that would result in an accuracy over this maximum will instead return an error. A value of 0 implies Perfect Accuracy.
+	Log            string            `json:"log"`              // Can be one of 'none', 'serial', 'hash'. Specifies how much information is stored in the TSA and available for query. Note that 'serial' and 'hash' have performance implications
+	Certs          map[string]string `json:"certs"`            // Certificates in PEM format.
+	Public         map[string]string `json:"public"`           // List of currently active signing public key in base64 format. Generally only one, but if a revocation or expiry is pending, then there may be more than one during the switchover.
+	Preferred      string            `json:"preferred"`        // Preferred Certificate. Will use this one if no cert is specified.
+	RFC3161        bool              `json:"rfc3161"`          // Does this rule support RFC 3161
+	Info           interface{}       `json:"info,omitempty"`   // Any additional TSA specific information
 }
 
-func (policy *Policy) GetCert(certId string) (*x509.Certificate, error) {
-	certPEM, ok := policy.Certs[certId]
+func (rule *Rule) GetCert(certId string) (*x509.Certificate, error) {
+	certPEM, ok := rule.Certs[certId]
 	if !ok {
 		return nil, ErrInvalidCertificateId
 	}
@@ -245,15 +246,15 @@ func (policy *Policy) GetCert(certId string) (*x509.Certificate, error) {
 	return cert, nil
 }
 
-func (policy *Policy) GetCerts() ([]*x509.Certificate, error) {
+func (rule *Rule) GetCerts() ([]*x509.Certificate, error) {
 	certs := []*x509.Certificate{}
 
-	if policy.Certs == nil {
+	if rule.Certs == nil {
 		return certs, nil
 	}
 
-	for certId, _ := range policy.Certs {
-		cert, err := policy.GetCert(certId)
+	for certId, _ := range rule.Certs {
+		cert, err := rule.GetCert(certId)
 		if err != nil {
 			return nil, err
 		}
@@ -263,8 +264,8 @@ func (policy *Policy) GetCerts() ([]*x509.Certificate, error) {
 	return certs, nil
 }
 
-func (policy *Policy) GetPublicKey(certId string) (interface{}, error) {
-	keyPEM, ok := policy.Public[certId]
+func (rule *Rule) GetPublicKey(certId string) (interface{}, error) {
+	keyPEM, ok := rule.Public[certId]
 	if !ok {
 		return nil, ErrInvalidCertificateId
 	}
@@ -287,15 +288,15 @@ func (policy *Policy) GetPublicKey(certId string) (interface{}, error) {
 
 // Get all public keys.
 // Each interface{} item will be one of
-func (policy *Policy) GetPublicKeys() ([]interface{}, error) {
+func (rule *Rule) GetPublicKeys() ([]interface{}, error) {
 	pubs := []interface{}{}
 
-	if policy.Public == nil {
+	if rule.Public == nil {
 		return pubs, nil
 	}
 
-	for certId, _ := range policy.Public {
-		pub, err := policy.GetPublicKey(certId)
+	for certId, _ := range rule.Public {
+		pub, err := rule.GetPublicKey(certId)
 		if err != nil {
 			return nil, err
 		}
@@ -305,10 +306,10 @@ func (policy *Policy) GetPublicKeys() ([]interface{}, error) {
 	return pubs, nil
 }
 
-func (policy *Policy) SupportedHashes() ([]crypto.Hash, error) {
+func (rule *Rule) SupportedHashes() ([]crypto.Hash, error) {
 	supported := []crypto.Hash{}
 
-	for _, name := range policy.Supports {
+	for _, name := range rule.Supports {
 		hashIdentifier, err := cryptoid.HashAlgorithmByName(name)
 		if err != nil {
 			return nil, err
@@ -319,7 +320,15 @@ func (policy *Policy) SupportedHashes() ([]crypto.Hash, error) {
 	return supported, nil
 }
 
-type PolicyList map[string]Policy
+type RuleList map[string]*Rule
+
+func (rl RuleList) GetRule(id string) (*Rule, error) {
+	rule, ok := rl[id]
+	if !ok {
+		return nil, ErrInvalidRuleId
+	}
+	return rule, nil
+}
 
 type ResponseError struct {
 	*ErrorCode
@@ -356,7 +365,7 @@ var (
 	ErrorCodeStampTimeout    = &ErrorCode{5, "Stamp Timeout"}
 	ErrorCodeRequestTimeout  = &ErrorCode{6, "Request Timeout"}
 	ErrorCodeAccuracy        = &ErrorCode{7, "Accuracy Error"}
-	ErrorBadPolicy           = &ErrorCode{7, "Unacceptable Policy"}
+	ErrorBadRule             = &ErrorCode{7, "Unacceptable Rule"}
 	ErrorBadCert             = &ErrorCode{7, "Unacceptable Cert"}
-	ErrorPolicyUpdated       = &ErrorCode{7, "Policy Updated"}
+	ErrorRuleUpdated         = &ErrorCode{7, "Rule Updated"}
 )

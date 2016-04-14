@@ -55,13 +55,23 @@ func (c *Client) Connect() error {
 	}
 
 	var err error
-	c.conn, c.resp, err = clockDialer.Dial(c.rule.Url, nil)
+	c.conn, c.resp, err = clockDialer.Dial("ws://"+c.rule.Url+"/socket", nil)
 	if err != nil {
 		return err
 	}
 
 	c.state = stateConnected
 	return nil
+}
+
+func (c *Client) GracefulClose() {
+	// Send the close message
+	c.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "goodbye"))
+	// TODO: Drain messages until we get confirmation of closure, but put in a timer that just closes if we are waiting too long
+}
+
+func (c *Client) Close() {
+	c.conn.Close()
 }
 
 // Send request and receive response synchronistically
@@ -88,7 +98,9 @@ func (c *Client) SendReceive(req *Request) (*Response, error) {
 	}
 
 	resp := new(Response)
+
 	err = json.Unmarshal(data, resp)
+
 	if err != nil {
 		return resp, err
 	}

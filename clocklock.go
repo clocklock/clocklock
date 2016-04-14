@@ -10,7 +10,6 @@ import (
 	"encoding/asn1"
 	"encoding/binary"
 	"encoding/hex"
-	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"github.com/phayes/cryptoid"
@@ -31,55 +30,24 @@ var (
 )
 
 type Request struct {
-	Rule   string      `json:"rule"`   // rule ID
-	Hash   crypto.Hash `json:"hash"`   // numeric ID of the hash algorithm for the digest. Will be a string-name in JSON.
-	Digest []byte      `json:"digest"` // When converting and from to json, should be in hex format
-	Nonce  uint64      `json:"nonce"`  // 8 bytes of random data represented numerically as an uint64. Assumed to be 0 if elided.
-	Cert   string      `json:"cert"`   // Cert ID to request for signing. Optional. Hex encoding of the SHA256 fingerprint of the DER certificate.
+	Rule   string      `json:"rule"`            // rule ID
+	Hash   crypto.Hash `json:"hash"`            // numeric ID of the hash algorithm for the digest. Will be a string-name in JSON.
+	Digest []byte      `json:"digest"`          // When converting and from to json, should be in hex format
+	Nonce  uint64      `json:"nonce,omitempty"` // 8 bytes of random data represented numerically as an uint64. Assumed to be 0 if elided.
+	Cert   string      `json:"cert,omitempty"`  // Cert ID to request for signing. Optional. Hex encoding of the SHA256 fingerprint of the DER certificate.
+}
+
+func NewRequest(rule string, hash crypto.Hash, digest []byte) *Request {
+	req := new(Request)
+	req.Rule = rule
+	req.Hash = hash
+	req.Digest = digest
+
+	return req
 }
 
 func (req *Request) GenerateNonce() error {
-	return binary.Read(rand.Reader, binary.BigEndian, req.Nonce)
-}
-
-func (req *Request) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
-		*Request
-		Hash string
-	}{
-		Request: req,
-		Hash:    cryptoid.HashAlgorithmByCrypto(req.Hash).Name,
-	})
-}
-
-func (req *Request) UnmarshalJSON(data []byte) error {
-	un := struct {
-		*Request
-		Hash string
-	}{
-		Request: req,
-	}
-
-	err := json.Unmarshal(data, &un)
-	if err != nil {
-		return err
-	}
-	hashAlgo, err := cryptoid.HashAlgorithmByName(un.Hash)
-	if err != nil {
-		return err
-	}
-	if hashAlgo.Hash == 0 {
-		return cryptoid.UnableToFind
-	}
-
-	// Set values
-	req.Rule = un.Rule
-	req.Hash = hashAlgo.Hash
-	req.Digest = un.Digest
-	req.Nonce = un.Nonce
-	req.Cert = un.Cert
-
-	return nil
+	return binary.Read(rand.Reader, binary.BigEndian, &req.Nonce)
 }
 
 type Response struct {

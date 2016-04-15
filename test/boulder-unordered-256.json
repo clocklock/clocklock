@@ -1,0 +1,21 @@
+{
+	"id" : "boulder-ordered-256",
+	"url" : "localhost:8080/boulder-ordered-256", 
+	"name" : "boulder-ordered-256",
+	"description" : "High accuracy time with a direct connection to NIST atomic clocks in Boulder CO. Will stamp up to 256 bit hashes with ECDSA.", 
+	"active": true,
+	"ordered": true,
+	"supports": ["SHA1", "SHA224", "SHA256", "SHA3-224", "SHA3-256"], 
+	"stamp-timeout" : 0, 
+	"request-timeout": 0, 
+	"accuracy": 0, 
+	"log": "none", 
+	"rfc3163": false, 
+	"certs": {
+		"718bb32b15a83ea12526b807d6e717d2544585f60c20acfc44dd13233eaca8cf" : "-----BEGIN CERTIFICATE-----\nMIICPjCCAeWgAwIBAgIJAPkrUJVoBJxEMAoGCCqGSM49BAMCMGsxCzAJBgNVBAYT\nAkdCMQ8wDQYDVQQIDAZMb25kb24xDzANBgNVBAcMBkxvbmRvbjESMBAGA1UECgwJ\nR09SRkMzMTYxMRAwDgYDVQQLDAdUZXN0aW5nMRQwEgYDVQQDDAtleGFtcGxlLmNv\nbTAeFw0xNjA0MDkwNTQyNDFaFw0xNzA0MDkwNTQyNDFaMGsxCzAJBgNVBAYTAkdC\nMQ8wDQYDVQQIDAZMb25kb24xDzANBgNVBAcMBkxvbmRvbjESMBAGA1UECgwJR09S\nRkMzMTYxMRAwDgYDVQQLDAdUZXN0aW5nMRQwEgYDVQQDDAtleGFtcGxlLmNvbTBZ\nMBMGByqGSM49AgEGCCqGSM49AwEHA0IABOBAXjFa7uR1DWuWbOBbKwV+Q2mFk8z7\nmows9+eb6LpRqmElvM7eSoLbB40qgyrJky7QdoUFEC810cCh91VnBWejcjBwMAkG\nA1UdEwQCMAAwHQYDVR0OBBYEFPb0q3czrRtOT32FX9ulQqUXhkyWMB8GA1UdIwQY\nMBaAFPb0q3czrRtOT32FX9ulQqUXhkyWMAsGA1UdDwQEAwIGwDAWBgNVHSUBAf8E\nDDAKBggrBgEFBQcDCDAKBggqhkjOPQQDAgNHADBEAiAz0ZLB48PMTYU178ozX0qV\nvXlMnqGLpF/sFJD+Q7cw+wIgQYPS1LrlqfptwDwKdTiYazOwUGqO+6t0ld2q8u0Q\nGIc=\n-----END CERTIFICATE-----"
+	}, 
+	"public": {
+		"718bb32b15a83ea12526b807d6e717d2544585f60c20acfc44dd13233eaca8cf" : "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE4EBeMVru5HUNa5Zs4FsrBX5DaYWT\nzPuajCz355voulGqYSW8zt5KgtsHjSqDKsmTLtB2hQUQLzXRwKH3VWcFZw==\n-----END PUBLIC KEY-----"
+	}, 
+	"preferred" : "718bb32b15a83ea12526b807d6e717d2544585f60c20acfc44dd13233eaca8cf"
+}

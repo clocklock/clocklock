@@ -11,13 +11,15 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/pem"
-	"github.com/phayes/cryptoid"
 	"math/big"
 	"time"
+
+	"github.com/phayes/cryptoid"
 )
 
-// Add any additional trusted root certificates. Should only be used for testing.
-var RootCerts *x509.CertPool
+// RootCerts is for any additional trusted root certificates.
+// Should only be used for testing.
+var RootCerts = x509.NewCertPool()
 
 type Request struct {
 	Rule   string      `json:"rule"`            // rule ID
@@ -50,7 +52,7 @@ type Response struct {
 	Error *ResponseError `json:"error"`
 }
 
-// The TimeStampToken is the sha256 hash of the concactenation of the following:
+// TimeStampToken is the sha256 hash of the concactenation of the following:
 // - Hash ID
 // - digest bytes
 // - time
@@ -97,7 +99,7 @@ func (resp *Response) TimeStampToken() []byte {
 	return buf.Sum(nil)
 }
 
-// Fully verify the response
+// Verify fully verifies the response
 // The caller is responsible for passing the correct certificate (as retreived from the rule)
 func (resp *Response) Verify(req *Request, cert *x509.Certificate) error {
 	if !resp.Success {

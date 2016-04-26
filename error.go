@@ -5,6 +5,7 @@ import (
 	"strconv"
 )
 
+// Errors
 var (
 	ErrInvalidPEMBlock       = errors.New("Invalid PEM Block.")
 	ErrInvalidCertificatePEM = errors.New("Invalid Certificate")
@@ -16,6 +17,7 @@ var (
 	ErrMismatchedHash        = errors.New("Mismatched Hash Digest")
 )
 
+// Error Code errors
 var (
 	ErrorCodeUnknownError    = &ErrorCode{0, "Unknown Error"}
 	ErrorCodeInvalidRequest  = &ErrorCode{1, "Invalid Request"}
@@ -32,7 +34,7 @@ var (
 
 type ResponseError struct {
 	*ErrorCode
-	Message error `json:message` // Any additional information about this error
+	Message error `json:"message"` // Any additional information about this error
 }
 
 func NewResponseError(code *ErrorCode, err error) *ResponseError {

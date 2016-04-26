@@ -3,8 +3,9 @@ package clocklock
 import (
 	"encoding/json"
 	"errors"
-	"github.com/gorilla/websocket"
 	"net/http"
+
+	"github.com/gorilla/websocket"
 )
 
 const (
@@ -12,9 +13,7 @@ const (
 	stateConnected
 )
 
-var (
-	ErrClientDisconnected = errors.New("clocklock: Client disconnected")
-)
+var ErrClientDisconnected = errors.New("clocklock: Client disconnected")
 
 func FetchRule(url, ruleId string) (*Rule, error) {
 	resp, err := http.Get(url)
@@ -74,7 +73,7 @@ func (c *Client) Close() {
 	c.conn.Close()
 }
 
-// Send request and receive response synchronistically
+// SendReceive sends a request and receive the response synchronistically
 func (c *Client) SendReceive(req *Request) (*Response, error) {
 	if c.state != stateConnected {
 		return nil, ErrClientDisconnected
